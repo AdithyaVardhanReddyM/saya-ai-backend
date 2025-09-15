@@ -13,10 +13,22 @@ from crewai.llm import LLM
 from database import get_db, Embeddings
 from file_processor import FileProcessor
 from tools.vector_search_tool import vector_search
+from tools.stripe_mcp_tool import stripe_mcp
+from tools.slack_tools import (
+    slack_list_channels,
+    slack_post_message,
+    slack_reply_to_thread,
+    slack_add_reaction,
+    slack_get_channel_history,
+    slack_get_thread_replies,
+    slack_get_users,
+    slack_get_user_profile
+)
 
 # Load .env
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+CAL_EVENT_URL = os.getenv("CAL_EVENT_URL")
 
 # Configure Gemini LLM via LiteLLM wrapper
 gemini_llm = LLM(
@@ -46,9 +58,20 @@ class ProcessFileResponse(BaseModel):
 
 support_agent = Agent(
     role="Customer Support Agent",
-    goal="Assist customers by providing accurate answers and resolving issues using both knowledge base search and system tools.",
-    backstory="You are a skilled support agent with access to company knowledge (via vector search) and operational tools.",
-    tools=[vector_search],
+    goal="Assist customers using knowledge base (vector search) and operational tools (Stripe MCP and Slack)",
+    backstory="You are a skilled support agent who can both answer policy questions, take actions in Stripe via MCP, and communicate with the team via Slack.",
+    tools=[
+        stripe_mcp,
+        vector_search,
+        slack_list_channels,
+        slack_post_message,
+        slack_reply_to_thread,
+        slack_add_reaction,
+        slack_get_channel_history,
+        slack_get_thread_replies,
+        slack_get_users,
+        slack_get_user_profile
+    ],
     verbose=True,
     memory=True,
     llm=gemini_llm
@@ -63,6 +86,10 @@ async def chat(msg: Message):
             f"Respond to the customer message: {msg.message}. "
             f"If you need extra knowledge, use the VectorSearchTool, agent_id is {msg.agentId} "
             "to retrieve relevant context from the database. "
+            "If the customer requests an account or payment action (like refund or cancel), use the StripeMCPTool. "
+            "If there are important events related to payments or other critical issues that require team attention, use the Slack tools to notify the support channel. "
+            "If the customer wants to schedule a meeting, provide them with the following calendar URL: " + CAL_EVENT_URL + " "
+            "You may use any combination of tools as needed. "
             "Always answer in a polite, supportive, and clear way."
         ),
         expected_output="A well-structured, polite, and clear customer response.",
