@@ -21,4 +21,5 @@ dependencies = [
     "langchain-text-splitters>=0.0.1",
     "httpx>=0.25.0",
     "tidb-vector>=0.0.9",
+    "crewai-tools>=0.0.1",
 ]

@@ -12,6 +12,7 @@ from crewai.llm import LLM
 
 from database import get_db, Embeddings
 from file_processor import FileProcessor
+from tools.vector_search_tool import vector_search
 
 # Load .env
 load_dotenv()
@@ -19,7 +20,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Configure Gemini LLM via LiteLLM wrapper
 gemini_llm = LLM(
-    model="gemini/gemini-2.0-flash",   # LiteLLM expects provider/model format
+    model="gemini/gemini-2.5-flash",   # LiteLLM expects provider/model format
     api_key=GEMINI_API_KEY,
 )
 
@@ -31,6 +32,7 @@ file_processor = FileProcessor()
 
 class Message(BaseModel):
     message: str
+    agentId: str
 
 class ProcessFileRequest(BaseModel):
     url: str
@@ -42,25 +44,28 @@ class ProcessFileResponse(BaseModel):
     message: str
     chunks_processed: int
 
-# Define a customer support agent
 support_agent = Agent(
     role="Customer Support Agent",
-    goal="Assist customers in a friendly and professional way.",
-    backstory=(
-        "You are empathetic and knowledgeable, helping users "
-        "with order issues, account problems, and general inquiries."
-    ),
+    goal="Assist customers by providing accurate answers and resolving issues using both knowledge base search and system tools.",
+    backstory="You are a skilled support agent with access to company knowledge (via vector search) and operational tools.",
+    tools=[vector_search],
     verbose=True,
     memory=True,
-    llm=gemini_llm,
+    llm=gemini_llm
 )
+
 
 @app.post("/chat")
 async def chat(msg: Message):
     # Define the support task
     support_task = Task(
-        description=f"Respond to the customer message: {msg.message}",
-        expected_output="A polite, clear, and supportive response to the customer.",
+        description=(
+            f"Respond to the customer message: {msg.message}. "
+            f"If you need extra knowledge, use the VectorSearchTool, agent_id is {msg.agentId} "
+            "to retrieve relevant context from the database. "
+            "Always answer in a polite, supportive, and clear way."
+        ),
+        expected_output="A well-structured, polite, and clear customer response.",
         agent=support_agent,
     )
 
@@ -125,76 +130,76 @@ async def process_file(request: ProcessFileRequest, db: Session = Depends(get_db
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
-@app.get("/embeddings/{agent_id}")
-async def get_embeddings(agent_id: str, db: Session = Depends(get_db)):
-    """
-    Get all embeddings for a specific agent
-    """
-    try:
-        embeddings = db.query(Embeddings).filter(Embeddings.agentId == agent_id).all()
+# @app.get("/embeddings/{agent_id}")
+# async def get_embeddings(agent_id: str, db: Session = Depends(get_db)):
+#     """
+#     Get all embeddings for a specific agent
+#     """
+#     try:
+#         embeddings = db.query(Embeddings).filter(Embeddings.agentId == agent_id).all()
         
-        result = []
-        for embedding in embeddings:
-            result.append({
-                "id": embedding.id,
-                "agentId": embedding.agentId,
-                "text": embedding.text[:200] + "..." if len(embedding.text) > 200 else embedding.text,
-                "metadata": embedding.vectorMetadata,
-                "createdAt": embedding.createdAt
-            })
+#         result = []
+#         for embedding in embeddings:
+#             result.append({
+#                 "id": embedding.id,
+#                 "agentId": embedding.agentId,
+#                 "text": embedding.text[:200] + "..." if len(embedding.text) > 200 else embedding.text,
+#                 "metadata": embedding.vectorMetadata,
+#                 "createdAt": embedding.createdAt
+#             })
         
-        return {
-            "agent_id": agent_id,
-            "total_embeddings": len(result),
-            "embeddings": result
-        }
+#         return {
+#             "agent_id": agent_id,
+#             "total_embeddings": len(result),
+#             "embeddings": result
+#         }
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving embeddings: {str(e)}")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error retrieving embeddings: {str(e)}")
 
-@app.post("/search-similar")
-async def search_similar(
-    query: str, 
-    agent_id: str, 
-    limit: int = 5, 
-    db: Session = Depends(get_db)
-):
-    """
-    Search for similar text chunks using vector similarity
-    """
-    try:
-        # Generate embedding for the query
-        query_embedding = file_processor.generate_embeddings([query])[0]
+# @app.post("/search-similar")
+# async def search_similar(
+#     query: str, 
+#     agent_id: str, 
+#     limit: int = 5, 
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Search for similar text chunks using vector similarity
+#     """
+#     try:
+#         # Generate embedding for the query
+#         query_embedding = file_processor.generate_embeddings([query])[0]
         
-        # Search for similar vectors using cosine distance
-        distance = Embeddings.vector.cosine_distance(query_embedding).label('distance')
+#         # Search for similar vectors using cosine distance
+#         distance = Embeddings.vector.cosine_distance(query_embedding).label('distance')
         
-        results = db.query(
-            Embeddings, distance
-        ).filter(
-            Embeddings.agentId == agent_id
-        ).order_by(distance).limit(limit).all()
+#         results = db.query(
+#             Embeddings, distance
+#         ).filter(
+#             Embeddings.agentId == agent_id
+#         ).order_by(distance).limit(limit).all()
         
-        # Format results
-        similar_chunks = []
-        for embedding, dist in results:
-            similar_chunks.append({
-                "id": embedding.id,
-                "text": embedding.text,
-                "metadata": embedding.vectorMetadata,
-                "distance": float(dist),
-                "createdAt": embedding.createdAt
-            })
+#         # Format results
+#         similar_chunks = []
+#         for embedding, dist in results:
+#             similar_chunks.append({
+#                 "id": embedding.id,
+#                 "text": embedding.text,
+#                 "metadata": embedding.vectorMetadata,
+#                 "distance": float(dist),
+#                 "createdAt": embedding.createdAt
+#             })
         
-        return {
-            "query": query,
-            "agent_id": agent_id,
-            "results": similar_chunks,
-            "total_results": len(similar_chunks)
-        }
+#         return {
+#             "query": query,
+#             "agent_id": agent_id,
+#             "results": similar_chunks,
+#             "total_results": len(similar_chunks)
+#         }
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching similar chunks: {str(e)}")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error searching similar chunks: {str(e)}")
 
 @app.get("/health")
 async def health_check():

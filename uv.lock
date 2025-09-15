@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -412,6 +412,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8f/59/2fb28345ce686b749e712efb505797d8d6073b7ebc9a5dcdf93c136d783f/crewai-0.186.1.tar.gz", hash = "sha256:3fd12954082c301434a7d8a2b20ddaf610eb6da1bba3a76aa38402e5c6462fbf", size = 6556945, upload-time = "2025-09-11T00:01:39.758Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/cf/e9f6bc5448ab83509f29006ea1df17073d03b06be2000e8f0b330230e14b/crewai-0.186.1-py3-none-any.whl", hash = "sha256:92acde629f079d2c701ff8f5d648a270e64274d80c7f3cf0131c420a890d84d1", size = 423346, upload-time = "2025-09-11T00:01:37.673Z" },
+]
+
+[[package]]
+name = "crewai-tools"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/34/861d7f9cb24b77740e349e8078b3f3d9a99672318ee9fd5224bf2b584002/crewai_tools-0.0.1.tar.gz", hash = "sha256:2e3ea6df9ec9760110a2e7cdf64aa1b26540921645b54def5c1c45923928a73b", size = 1481, upload-time = "2024-01-15T22:20:31.531Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/8e/79d2095e8061096895c92ca8894d2544fdc7510addc7019c51198427f4d4/crewai_tools-0.0.1-py3-none-any.whl", hash = "sha256:54fdae3bb296d2968284f9a0bcfb8fd383d81fff9fa02968a0fad33d3ed08a4a", size = 1990, upload-time = "2024-01-15T22:20:29.447Z" },
 ]
 
 [[package]]
@@ -2310,6 +2319,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "cohere" },
     { name = "crewai" },
+    { name = "crewai-tools" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -2330,6 +2340,7 @@ dependencies = [
 requires-dist = [
     { name = "cohere", specifier = ">=5.0.0" },
     { name = "crewai", specifier = ">=0.186.1" },
+    { name = "crewai-tools", specifier = ">=0.0.1" },
     { name = "cryptography", specifier = ">=41.0.0" },
     { name = "fastapi", specifier = ">=0.116.1" },
     { name = "httpx", specifier = ">=0.25.0" },
