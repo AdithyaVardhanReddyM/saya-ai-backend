@@ -1,15 +1,17 @@
-import os
 import requests
 import uuid
 from crewai.tools import tool
 
+
 STRIPE_MCP_URL = "https://mcp.stripe.com/"
-STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")  # Load securely
 
 @tool("StripeMCPTool")
-def stripe_mcp(name: str, arguments: dict) -> str:
+def stripe_mcp(name: str, arguments: dict, api_key: str) -> str:
     """
     Calls the Stripe MCP server to execute an action.
+    
+    Required parameters:
+      - api_key (str): Stripe Secret Key. Must be provided in every call. No environment fallback.
     
     Available tools and their parameters:
     
@@ -114,9 +116,14 @@ def stripe_mcp(name: str, arguments: dict) -> str:
             "id": str(uuid.uuid4())  # unique request ID
         }
 
+        if not api_key:
+            raise ValueError("StripeMCPTool requires 'api_key' parameter; no environment fallback.")
+        
+
+
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {STRIPE_API_KEY}"
+            "Authorization": f"Bearer {api_key}"
         }
 
         response = requests.post(STRIPE_MCP_URL, json=payload, headers=headers)

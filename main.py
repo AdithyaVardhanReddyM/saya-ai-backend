@@ -45,6 +45,14 @@ file_processor = FileProcessor()
 class Message(BaseModel):
     message: str
     agentId: str
+    CalEnabled: bool | None = None
+    StripeEnabled: bool | None = None
+    SlackEnabled: bool | None = None
+    CalUrl: str | None = None
+    STRIPE_API_KEY: str | None = None
+    SLACK_BOT_TOKEN: str | None = None
+    SLACK_TEAM_ID: str | None = None
+    SLACK_CHANNEL_IDS: str | None = None
 
 class ProcessFileRequest(BaseModel):
     url: str
@@ -56,41 +64,92 @@ class ProcessFileResponse(BaseModel):
     message: str
     chunks_processed: int
 
-support_agent = Agent(
-    role="Customer Support Agent",
-    goal="Assist customers using knowledge base (vector search) and operational tools (Stripe MCP and Slack)",
-    backstory="You are a skilled support agent who can both answer policy questions, take actions in Stripe via MCP, and communicate with the team via Slack.",
-    tools=[
-        stripe_mcp,
-        vector_search,
-        slack_list_channels,
-        slack_post_message,
-        slack_reply_to_thread,
-        slack_add_reaction,
-        slack_get_channel_history,
-        slack_get_thread_replies,
-        slack_get_users,
-        slack_get_user_profile
-    ],
-    verbose=True,
-    memory=True,
-    llm=gemini_llm
-)
+# Agent will be created per-request in /chat based on enabled tools and provided credentials
 
 
 @app.post("/chat")
 async def chat(msg: Message):
-    # Define the support task
+    # Determine enabled capabilities strictly from request (no env fallbacks)
+    stripe_enabled = bool(msg.StripeEnabled) and bool(msg.STRIPE_API_KEY)
+    slack_enabled = bool(msg.SlackEnabled) and bool(msg.SLACK_BOT_TOKEN)
+    cal_enabled = bool(msg.CalEnabled) and bool(msg.CalUrl)
+
+    # Build tool list
+    tools_to_use = [vector_search]
+    if stripe_enabled:
+        tools_to_use.append(stripe_mcp)
+    if slack_enabled:
+        tools_to_use.extend([
+            slack_list_channels,
+            slack_post_message,
+            slack_reply_to_thread,
+            slack_add_reaction,
+            slack_get_channel_history,
+            slack_get_thread_replies,
+            slack_get_users,
+            slack_get_user_profile
+        ])
+
+    # Dynamic agent profile
+    capabilities = ["RAG (vector search)"]
+    if stripe_enabled:
+        capabilities.append("Stripe MCP")
+    if slack_enabled:
+        capabilities.append("Slack")
+    role = "Customer Support Agent"
+    goal = f"Assist customers using {', '.join(capabilities)}."
+    backstory_parts = [
+        "You are a skilled support agent who can answer policy questions using the knowledge base (RAG)."
+    ]
+    if stripe_enabled:
+        backstory_parts.append("You can take actions in Stripe via the Stripe MCP tool.")
+    if slack_enabled:
+        backstory_parts.append("You can communicate with the team and perform operations in Slack.")
+    backstory = " ".join(backstory_parts)
+
+    # Create an agent per request with the exact tools enabled
+    support_agent = Agent(
+        role=role,
+        goal=goal,
+        backstory=backstory,
+        tools=tools_to_use,
+        verbose=True,
+        memory=True,
+        llm=gemini_llm
+    )
+
+    # Tool configuration that MUST be respected by the agent when calling tools
+    tool_config_lines = []
+    if stripe_enabled:
+        tool_config_lines.append(f"- StripeMCPTool: include api_key='{msg.STRIPE_API_KEY}' in every call.")
+    if slack_enabled:
+        tool_config_lines.extend([
+            f"- SlackListChannelsTool: include token='{msg.SLACK_BOT_TOKEN}', and either team_id='{msg.SLACK_TEAM_ID}' or channel_ids='{msg.SLACK_CHANNEL_IDS}'.",
+            f"- SlackPostMessageTool: include token='{msg.SLACK_BOT_TOKEN}'.",
+            f"- SlackReplyToThreadTool: include token='{msg.SLACK_BOT_TOKEN}'.",
+            f"- SlackAddReactionTool: include token='{msg.SLACK_BOT_TOKEN}'.",
+            f"- SlackGetChannelHistoryTool: include token='{msg.SLACK_BOT_TOKEN}'.",
+            f"- SlackGetThreadRepliesTool: include token='{msg.SLACK_BOT_TOKEN}'.",
+            f"- SlackGetUsersTool: include token='{msg.SLACK_BOT_TOKEN}', team_id='{msg.SLACK_TEAM_ID}'.",
+            f"- SlackGetUserProfileTool: include token='{msg.SLACK_BOT_TOKEN}'.",
+        ])
+    tool_config = "\n".join(tool_config_lines) if tool_config_lines else "No external tool usage is enabled."
+
+    # Calendar behavior: only when explicitly enabled and provided via request
+    if cal_enabled:
+        cal_sentence = f"If the customer wants to schedule a meeting, provide this calendar URL: {msg.CalUrl}."
+    else:
+        cal_sentence = "Do not mention any scheduling or calendars."
+
+    # Define the support task with strictly specified tool parameter passing
     support_task = Task(
         description=(
-            f"Respond to the customer message: {msg.message}. "
-            f"If you need extra knowledge, use the VectorSearchTool, agent_id is {msg.agentId} "
-            "to retrieve relevant context from the database. "
-            "If the customer requests an account or payment action (like refund or cancel), use the StripeMCPTool. "
-            "If there are important events related to payments or other critical issues that require team attention, use the Slack tools to notify the support channel. "
-            "If the customer wants to schedule a meeting, provide them with the following calendar URL: " + CAL_EVENT_URL + " "
-            "You may use any combination of tools as needed. "
-            "Always answer in a polite, supportive, and clear way."
+            f"Respond to the customer message: {msg.message}\n"
+            f"Agent context: agent_id={msg.agentId}.\n"
+            f"{cal_sentence}\n"
+            "ToolConfig (must be followed exactly when calling tools):\n"
+            f"{tool_config}\n"
+            "When calling tools, strictly pass parameters as listed in ToolConfig. Do not invent or omit parameters."
         ),
         expected_output="A well-structured, polite, and clear customer response.",
         agent=support_agent,
