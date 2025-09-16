@@ -1,6 +1,16 @@
 # Saya AI Backend
 
-A FastAPI backend service with CrewAI agents and RAG (Retrieval-Augmented Generation) file processing capabilities using TiDB for vector storage.
+A comprehensive AI-powered customer support backend that leverages advanced agent orchestration and retrieval-augmented generation (RAG) to deliver intelligent, context-aware customer service. The system dynamically creates specialized AI agents using CrewAI that can understand customer queries, access relevant knowledge from processed documents, and execute actions across multiple integrated business platforms.
+
+## Key Capabilities
+
+- **Intelligent Agent Orchestration**: Uses CrewAI to create dynamic customer support agents that adapt their behavior based on the conversation context and available tools
+- **Document Processing & Knowledge Base**: Processes PDF and text documents to create searchable knowledge bases using vector embeddings stored in TiDB
+- **Multi-Platform Integration**: Seamlessly connects with payment processing systems, team communication platforms, and scheduling services to perform real-world actions
+- **Contextual Responses**: Combines vector search results with conversational AI to provide accurate, helpful responses to customer inquiries
+- **Actionable Support**: Agents can perform tasks like creating payment links, posting team updates, retrieving customer information, and facilitating meeting scheduling
+
+The backend provides RESTful APIs for chat interactions, file processing, and system health monitoring, making it easy to integrate into existing customer support workflows.
 
 ## Features
 

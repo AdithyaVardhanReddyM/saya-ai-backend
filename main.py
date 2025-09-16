@@ -141,15 +141,21 @@ async def chat(msg: Message):
     else:
         cal_sentence = "Do not mention any scheduling or calendars."
 
+    # Get current time
+    current_time = datetime.now().isoformat()
+
     # Define the support task with strictly specified tool parameter passing
     support_task = Task(
         description=(
             f"Respond to the customer message: {msg.message}\n"
             f"Agent context: agent_id={msg.agentId}.\n"
+            f"Current time: {current_time}\n"
             f"{cal_sentence}\n"
             "ToolConfig (must be followed exactly when calling tools):\n"
             f"{tool_config}\n"
             "When calling tools, strictly pass parameters as listed in ToolConfig. Do not invent or omit parameters."
+            "When customer asks for a refund or cancellation, check if that action adheres to relevant policies like refund policy etc only if provided"
+            "When ever some payments related actions happen, it is better to notify/send message only if slack tool is available"
         ),
         expected_output="A well-structured, polite, and clear customer response.",
         agent=support_agent,
